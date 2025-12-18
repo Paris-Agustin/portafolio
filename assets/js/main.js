@@ -226,4 +226,76 @@
   window.addEventListener('load', navmenuScrollspy);
   document.addEventListener('scroll', navmenuScrollspy);
 
+  /**
+   * Lazy-load images, background images and videos using IntersectionObserver.
+   * Videos keep their `autoplay` attribute but sources are assigned only when
+   * the element becomes visible, preventing heavy downloads at initial load.
+   */
+  function initLazyLoad() {
+    const imgs = document.querySelectorAll('img[data-src], img[data-srcset]');
+    const bgElems = document.querySelectorAll('[data-bg]');
+    const videos = document.querySelectorAll('video.lazy-video');
+
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver((entries, obs) => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return;
+          const el = entry.target;
+
+          if (el.tagName === 'IMG') {
+            if (el.dataset.src) el.src = el.dataset.src;
+            if (el.dataset.srcset) el.srcset = el.dataset.srcset;
+            el.removeAttribute('data-src'); el.removeAttribute('data-srcset');
+            obs.unobserve(el);
+            return;
+          }
+
+          if (el.hasAttribute('data-bg')) {
+            el.style.backgroundImage = `url(${el.getAttribute('data-bg')})`;
+            el.removeAttribute('data-bg');
+            obs.unobserve(el);
+            return;
+          }
+
+          if (el.tagName === 'VIDEO') {
+            // Prefer <source data-src> if present
+            const sources = el.querySelectorAll('source[data-src]');
+            sources.forEach(s => {
+              s.src = s.dataset.src;
+              s.removeAttribute('data-src');
+            });
+            // Also support video[data-src]
+            if (el.dataset.src) {
+              el.src = el.dataset.src;
+              el.removeAttribute('data-src');
+            }
+            try { el.load(); } catch (e) {}
+            if (el.autoplay) {
+              const playPromise = el.play();
+              if (playPromise !== undefined) playPromise.catch(() => {});
+            }
+            obs.unobserve(el);
+            return;
+          }
+        });
+      }, {rootMargin: '300px'});
+
+      imgs.forEach(i => io.observe(i));
+      bgElems.forEach(b => io.observe(b));
+      videos.forEach(v => io.observe(v));
+    } else {
+      // Fallback: load immediately
+      imgs.forEach(i => { if (i.dataset.src) i.src = i.dataset.src; if (i.dataset.srcset) i.srcset = i.dataset.srcset; });
+      bgElems.forEach(b => { b.style.backgroundImage = `url(${b.getAttribute('data-bg')})`; b.removeAttribute('data-bg'); });
+      videos.forEach(v => {
+        const sources = v.querySelectorAll('source[data-src]');
+        sources.forEach(s => s.src = s.dataset.src);
+        if (v.dataset.src) v.src = v.dataset.src;
+        try { v.load(); } catch (e) {}
+      });
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', initLazyLoad);
+
 })();
